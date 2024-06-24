@@ -36,12 +36,10 @@ public:
   DataFlowEngineBase() = default;
 
   void computeGENAndKILL(
-      // Function *f,
       const std::set<Instruction *> &InstSet,
       std::function<void(Instruction *, DataFlowResult *)> computeGEN,
       std::function<void(Instruction *, DataFlowResult *)> computeKILL,
       DataFlowResult *df) {
-
     /*
      * Compute the GENs and KILLs
      */
@@ -87,137 +85,165 @@ public:
       std::function<std::set<Value *> &(DataFlowResult *df,
                                         Instruction *instruction)>
           getOutSetOfInst,
-      std::function<Instruction *(Instruction *)> getNextInstruction) {
+      std::function<Instruction *(Instruction *)> getNextInstruction);
+};
+
+template <class T>
+DataFlowResult *DataFlowEngineBase<T>::applyGeneralizedForwardBase(
+    // Function *f,
+    const std::set<Instruction *> &InstSet,
+    std::function<void(Instruction *, DataFlowResult *)> computeGEN,
+    std::function<void(Instruction *, DataFlowResult *)> computeKILL,
+    std::function<void(Instruction *inst, std::set<Value *> &IN)> initializeIN,
+    std::function<void(Instruction *inst, std::set<Value *> &OUT)>
+        initializeOUT,
+    std::function<std::set<T>(T t)> getPredecessors,
+    std::function<std::set<T>(T t)> getSuccessors,
+    std::function<void(Instruction *inst,
+                       Instruction *predecessor,
+                       std::set<Value *> &IN,
+                       DataFlowResult *df)> computeIN,
+    std::function<void(Instruction *inst,
+                       std::set<Value *> &OUT,
+                       DataFlowResult *df)> computeOUT,
+    std::list<T> &WorkingList,
+    std::function<Instruction *(T t)> getFirstInstruction,
+    std::function<Instruction *(T t)> getLastInstruction,
+    std::function<std::set<Value *> &(DataFlowResult *df,
+                                      Instruction *instruction)> getInSetOfInst,
+    std::function<std::set<Value *> &(DataFlowResult *df,
+                                      Instruction *instruction)>
+        getOutSetOfInst,
+    std::function<Instruction *(Instruction *)> getNextInstruction) {
+
+  /*
+   * Initialize IN and OUT sets.
+   */
+  auto dfr = new DataFlowResult{};
+  // for (auto &bb : *f) {
+  //   for (auto &i : bb) {
+  //     auto &INSet = dfr->IN(&i);
+  //     auto &OUTSet = dfr->OUT(&i);
+  //     initializeIN(&i, INSet);
+  //     initializeOUT(&i, OUTSet);
+  //   }
+  // }
+
+  for (auto inst : InstSet) {
+    auto &INSet = dfr->IN(inst);
+    auto &OUTSet = dfr->OUT(inst);
+    initializeIN(inst, INSet);
+    initializeOUT(inst, OUTSet);
+  }
+
+  /*
+   * Compute the GENs and KILLs
+   */
+  computeGENAndKILL(InstSet, computeGEN, computeKILL, dfr);
+
+  /*
+   * copy the working list
+   */
+  std::list<T> workingList = WorkingList;
+
+  /*
+   * compute the working list untill empty
+   */
+  std::unordered_set<T> computedOnce;
+
+  while (!workingList.empty()) {
 
     /*
-     * Initialize IN and OUT sets.
+     * Fetch a compute unit
      */
-    auto dfr = new DataFlowResult{};
-    // for (auto &bb : *f) {
-    //   for (auto &i : bb) {
-    //     auto &INSet = dfr->IN(&i);
-    //     auto &OUTSet = dfr->OUT(&i);
-    //     initializeIN(&i, INSet);
-    //     initializeOUT(&i, OUTSet);
-    //   }
-    // }
+    auto nodeT = workingList.front();
 
-    for (auto inst : InstSet) {
-      auto &INSet = dfr->IN(inst);
-      auto &OUTSet = dfr->OUT(inst);
-      initializeIN(inst, INSet);
-      initializeOUT(inst, OUTSet);
+    /*
+     * Remove from the working list
+     */
+    workingList.pop_front();
+
+    /*
+     * Fetch the first instruction
+     */
+    auto inst = getFirstInstruction(nodeT);
+
+    /*
+     * Fetch the current IN and OUT
+     */
+    auto &inSetOfInst = getInSetOfInst(dfr, inst);
+    auto &outSetOfInst = getOutSetOfInst(dfr, inst);
+
+    /*
+     * Compute IN based on the predecessor
+     */
+    for (auto predecessorT : getPredecessors(nodeT)) {
+      /*
+       * Fetch the current predecessor Instruction
+       */
+      auto predecessorInst = getLastInstruction(predecessorT);
+
+      /*
+       * Compute IN
+       */
+      computeIN(inst, predecessorInst, inSetOfInst, dfr);
     }
 
     /*
-     * Compute the GENs and KILLs
+     * Compute OUT
      */
-    computeGENAndKILL(InstSet, computeGEN, computeKILL, dfr);
+    auto oldSizeOut = outSetOfInst.size();
+    computeOUT(inst, outSetOfInst, dfr);
 
     /*
-     * copy the working list
+     * check if nodeT is computed before or has any changes
      */
-    std::list<T> workingList = WorkingList;
-
-    /*
-     * compute the working list untill empty
-     */
-    std::unordered_set<T> computedOnce;
-
-    while (!workingList.empty()) {
+    if (computedOnce.find(nodeT) == computedOnce.end()
+        || (outSetOfInst.size() != oldSizeOut)) {
+      /*
+       * First Compute or Recompute
+       */
+      computedOnce.insert(nodeT);
 
       /*
-       * Fetch a compute unit
+       * Update the IN and OUT in the node
        */
-      auto nodeT = workingList.front();
+      auto currentI = inst;
+      auto predI = inst;
 
-      /*
-       * Remove from the working list
-       */
-      workingList.pop_front();
+      while (currentI != getLastInstruction(nodeT)) {
 
-      /*
-       * Fetch the first instruction
-       */
-      auto inst = getFirstInstruction(nodeT);
-
-      /*
-       * Fetch the current IN and OUT
-       */
-      auto &inSetOfInst = getInSetOfInst(dfr, inst);
-      auto &outSetOfInst = getOutSetOfInst(dfr, inst);
-
-      /*
-       * Compute IN based on the predecessor
-       */
-      for (auto predecessorT : getPredecessors(nodeT)) {
-        /*
-         * Fetch the current predecessor Instruction
-         */
-        auto predecessorInst = getLastInstruction(predecessorT);
+        currentI = getNextInstruction(currentI);
 
         /*
          * Compute IN
          */
-        computeIN(inst, predecessorInst, inSetOfInst, dfr);
+        auto &inSetOfI = getInSetOfInst(dfr, currentI);
+        computeIN(currentI, predI, inSetOfI, dfr);
+
+        /*
+         * Compute OUT
+         */
+        auto &outSetOfI = getOutSetOfInst(dfr, currentI);
+        computeOUT(currentI, outSetOfI, dfr);
+
+        /*
+         * update the predI
+         */
+        predI = currentI;
       }
 
       /*
-       * Compute OUT
+       * add the successors to the workingList
        */
-      auto oldSizeOut = outSetOfInst.size();
-      computeOUT(inst, outSetOfInst, dfr);
-
-      /*
-       * check if nodeT is computed before or has any changes
-       */
-      if (computedOnce.find(nodeT) == computedOnce.end()
-          || (outSetOfInst.size() != oldSizeOut)) {
-        /*
-         * First Compute or Recompute
-         */
-        computedOnce.insert(nodeT);
-
-        /*
-         * Update the IN and OUT in the node
-         */
-        auto currentI = inst;
-        auto predI = inst;
-
-        while (currentI != getLastInstruction(nodeT)) {
-
-          currentI = getNextInstruction(currentI);
-
-          /*
-           * Compute IN
-           */
-          auto &inSetOfI = getInSetOfInst(dfr, currentI);
-          computeIN(currentI, predI, inSetOfI, dfr);
-
-          /*
-           * Compute OUT
-           */
-          auto &outSetOfI = getOutSetOfInst(dfr, currentI);
-          computeOUT(currentI, outSetOfI, dfr);
-
-          /*
-           * update the predI
-           */
-          predI = currentI;
-        }
-
-        /*
-         * add the successors to the workingList
-         */
-        for (auto succT : getSuccessors(nodeT)) {
-          workingList.push_back(succT);
-        }
+      for (auto succT : getSuccessors(nodeT)) {
+        workingList.push_back(succT);
       }
     }
-
-    return dfr;
   }
-};
+
+  return dfr;
+}
 
 } // namespace arcana::noelle
 
