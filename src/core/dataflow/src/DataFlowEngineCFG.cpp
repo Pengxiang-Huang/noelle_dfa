@@ -113,13 +113,17 @@ DataFlowResult *DataFlowEngine::applyForward(
     return df->OUT(inst);
   };
 
-  auto getWorkingList = [](Function *f) {
-    std::list<BasicBlock *> workingList;
-    for (auto &bb : *f) {
-      workingList.push_back(&bb);
+  auto InstSet = std::set<Instruction *>();
+  for (auto &bb : *f) {
+    for (auto &i : bb) {
+      InstSet.insert(&i);
     }
-    return workingList;
-  };
+  }
+
+  std::list<BasicBlock *> WorkingList;
+  for (auto &bb : *f) {
+    WorkingList.push_back(&bb);
+  }
 
   auto getNextInstruction = [](Instruction *inst) {
     BasicBlock::iterator iter(inst);
@@ -132,7 +136,7 @@ DataFlowResult *DataFlowEngine::applyForward(
    */
   auto dfe = DataFlowEngineBase<BasicBlock *>();
 
-  auto dfr = dfe.applyGeneralizedForwardBase(f,
+  auto dfr = dfe.applyGeneralizedForwardBase(InstSet,
                                              computeGEN,
                                              computeKILL,
                                              initializeIN,
@@ -141,7 +145,7 @@ DataFlowResult *DataFlowEngine::applyForward(
                                              getSuccessors,
                                              computeIN,
                                              computeOUT,
-                                             getWorkingList,
+                                             WorkingList,
                                              getFirstInst,
                                              getLastInst,
                                              inSetOfInst,
@@ -231,13 +235,17 @@ DataFlowResult *DataFlowEngine::applyBackward(
     return df->IN(inst);
   };
 
-  auto getWorkingList = [](Function *f) {
-    std::list<BasicBlock *> workingList;
-    for (auto &bb : *f) {
-      workingList.push_front(&bb);
+  auto InstSet = std::set<Instruction *>();
+  for (auto &bb : *f) {
+    for (auto &i : bb) {
+      InstSet.insert(&i);
     }
-    return workingList;
-  };
+  }
+
+  std::list<BasicBlock *> WorkingList;
+  for (auto &bb : *f) {
+    WorkingList.push_front(&bb);
+  }
 
   auto getNextInstruction = [](Instruction *inst) {
     BasicBlock::iterator iter(inst);
@@ -247,7 +255,7 @@ DataFlowResult *DataFlowEngine::applyBackward(
 
   auto dfe = DataFlowEngineBase<BasicBlock *>();
 
-  auto dfr = dfe.applyGeneralizedForwardBase(f,
+  auto dfr = dfe.applyGeneralizedForwardBase(InstSet,
                                              computeGEN,
                                              computeKILL,
                                              initializeIN,
@@ -256,7 +264,7 @@ DataFlowResult *DataFlowEngine::applyBackward(
                                              getSuccessors,
                                              computeOUT,
                                              computeIN,
-                                             getWorkingList,
+                                             WorkingList,
                                              getFirstInst,
                                              getLastInst,
                                              inSetOfInst,

@@ -36,7 +36,8 @@ public:
   DataFlowEngineBase() = default;
 
   void computeGENAndKILL(
-      Function *f,
+      // Function *f,
+      const std::set<Instruction *> &InstSet,
       std::function<void(Instruction *, DataFlowResult *)> computeGEN,
       std::function<void(Instruction *, DataFlowResult *)> computeKILL,
       DataFlowResult *df) {
@@ -44,18 +45,24 @@ public:
     /*
      * Compute the GENs and KILLs
      */
-    for (auto &bb : *f) {
-      for (auto &i : bb) {
-        computeGEN(&i, df);
-        computeKILL(&i, df);
-      }
+    // for (auto &bb : *f) {
+    //   for (auto &i : bb) {
+    //     computeGEN(&i, df);
+    //     computeKILL(&i, df);
+    //   }
+    // }
+
+    for (auto inst : InstSet) {
+      computeGEN(inst, df);
+      computeKILL(inst, df);
     }
 
     return;
   }
 
   DataFlowResult *applyGeneralizedForwardBase(
-      Function *f,
+      // Function *f,
+      const std::set<Instruction *> &InstSet,
       std::function<void(Instruction *, DataFlowResult *)> computeGEN,
       std::function<void(Instruction *, DataFlowResult *)> computeKILL,
       std::function<void(Instruction *inst, std::set<Value *> &IN)>
@@ -71,9 +78,7 @@ public:
       std::function<void(Instruction *inst,
                          std::set<Value *> &OUT,
                          DataFlowResult *df)> computeOUT,
-
-      ////
-      std::function<std::list<T>(Function *f)> getWorkingList,
+      std::list<T> &WorkingList,
       std::function<Instruction *(T t)> getFirstInstruction,
       std::function<Instruction *(T t)> getLastInstruction,
       std::function<std::set<Value *> &(DataFlowResult *df,
@@ -88,24 +93,31 @@ public:
      * Initialize IN and OUT sets.
      */
     auto dfr = new DataFlowResult{};
-    for (auto &bb : *f) {
-      for (auto &i : bb) {
-        auto &INSet = dfr->IN(&i);
-        auto &OUTSet = dfr->OUT(&i);
-        initializeIN(&i, INSet);
-        initializeOUT(&i, OUTSet);
-      }
+    // for (auto &bb : *f) {
+    //   for (auto &i : bb) {
+    //     auto &INSet = dfr->IN(&i);
+    //     auto &OUTSet = dfr->OUT(&i);
+    //     initializeIN(&i, INSet);
+    //     initializeOUT(&i, OUTSet);
+    //   }
+    // }
+
+    for (auto inst : InstSet) {
+      auto &INSet = dfr->IN(inst);
+      auto &OUTSet = dfr->OUT(inst);
+      initializeIN(inst, INSet);
+      initializeOUT(inst, OUTSet);
     }
 
     /*
      * Compute the GENs and KILLs
      */
-    computeGENAndKILL(f, computeGEN, computeKILL, dfr);
+    computeGENAndKILL(InstSet, computeGEN, computeKILL, dfr);
 
     /*
-     * create the working list
+     * copy the working list
      */
-    std::list<T> workingList = getWorkingList(f);
+    std::list<T> workingList = WorkingList;
 
     /*
      * compute the working list untill empty
