@@ -43,13 +43,6 @@ public:
     /*
      * Compute the GENs and KILLs
      */
-    // for (auto &bb : *f) {
-    //   for (auto &i : bb) {
-    //     computeGEN(&i, df);
-    //     computeKILL(&i, df);
-    //   }
-    // }
-
     for (auto inst : InstSet) {
       computeGEN(inst, df);
       computeKILL(inst, df);
@@ -59,7 +52,6 @@ public:
   }
 
   DataFlowResult *applyGeneralizedForwardBase(
-      // Function *f,
       const std::set<Instruction *> &InstSet,
       std::function<void(Instruction *, DataFlowResult *)> computeGEN,
       std::function<void(Instruction *, DataFlowResult *)> computeKILL,
@@ -90,7 +82,6 @@ public:
 
 template <class T>
 DataFlowResult *DataFlowEngineBase<T>::applyGeneralizedForwardBase(
-    // Function *f,
     const std::set<Instruction *> &InstSet,
     std::function<void(Instruction *, DataFlowResult *)> computeGEN,
     std::function<void(Instruction *, DataFlowResult *)> computeKILL,
@@ -120,15 +111,6 @@ DataFlowResult *DataFlowEngineBase<T>::applyGeneralizedForwardBase(
    * Initialize IN and OUT sets.
    */
   auto dfr = new DataFlowResult{};
-  // for (auto &bb : *f) {
-  //   for (auto &i : bb) {
-  //     auto &INSet = dfr->IN(&i);
-  //     auto &OUTSet = dfr->OUT(&i);
-  //     initializeIN(&i, INSet);
-  //     initializeOUT(&i, OUTSet);
-  //   }
-  // }
-
   for (auto inst : InstSet) {
     auto &INSet = dfr->IN(inst);
     auto &OUTSet = dfr->OUT(inst);
